@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a73e8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="DocScan">
+  <link rel="manifest" href="manifest.json">
+  <title>DocScan — Document to PDF</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #1a73e8;
+      --primary-dark: #1558b0;
+      --primary-light: #e8f0fe;
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --text: #202124;
+      --text-secondary: #5f6368;
+      --success: #137333;
+      --success-bg: #e6f4ea;
+      --danger: #d93025;
+      --danger-light: #fce8e6;
+      --border: #dadce0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── App shell ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo svg { width: 22px; height: 22px; fill: white; }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+
+    #pageCount {
+      background: var(--primary);
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 100px;
+      display: none;
+    }
+
+    /* ── Screens ── */
+    .screen {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .screen.active { display: flex; }
+
+    /* ── CAPTURE SCREEN ── */
+    #captureScreen {
+      padding: 20px;
+      gap: 20px;
+      justify-content: flex-end;
+    }
+
+    .capture-hint {
+      text-align: center;
+      padding: 20px 20px 0;
+    }
+
+    .capture-hint .hint-icon {
+      width: 80px;
+      height: 80px;
+      background: var(--primary-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .capture-hint .hint-icon svg {
+      width: 40px;
+      height: 40px;
+      fill: var(--primary);
+    }
+
+    .capture-hint h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .capture-hint p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Thumbnail strip */
+    #thumbnailStrip {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #thumbnailStrip.visible { display: flex; }
+
+    .strip-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .thumbnails {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .thumbnails::-webkit-scrollbar { display: none; }
+
+    .thumb-wrap {
+      position: relative;
+      flex-shrink: 0;
+      width: 110px;
+      height: 130px;
+      border-radius: var(--radius-sm);
+      overflow: visible;
+    }
+
+    .thumb-wrap img {
+      width: 110px;
+      height: 130px;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      display: block;
+    }
+
+    .thumb-remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 26px;
+      height: 26px;
+      background: var(--danger);
+      color: white;
+      border: 2px solid white;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      box-shadow: var(--shadow);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .thumb-add {
+      flex-shrink: 0;
+      width: 110px;
+      height: 130px;
+      border-radius: var(--radius-sm);
+      border: 2px dashed var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .thumb-add:active { background: var(--primary-light); border-color: var(--primary); }
+    .thumb-add svg { width: 28px; height: 28px; fill: var(--text-secondary); }
+
+    /* Bottom action bar */
+    .bottom-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 16px 20px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+
+    /* Camera FAB */
+    .fab-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #cameraBtn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: none;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-md);
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, background 0.15s;
+    }
+
+    #cameraBtn:active { transform: scale(0.94); background: var(--primary-dark); }
+    #cameraBtn svg { width: 32px; height: 32px; fill: white; }
+
+    .fab-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    #convertBtn {
+      width: 100%;
+      padding: 18px;
+      border-radius: var(--radius);
+      background: var(--primary);
+      color: white;
+      font-size: 17px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, opacity 0.15s;
+      letter-spacing: 0.2px;
+    }
+
+    #convertBtn:disabled {
+      background: var(--border);
+      color: var(--text-secondary);
+      cursor: default;
+    }
+
+    #convertBtn:not(:disabled):active { background: var(--primary-dark); }
+
+    /* Secondary action button */
+    #uploadExistingBtn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--primary);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      width: 100%;
+      transition: background 0.15s;
+    }
+
+    #uploadExistingBtn { display: flex; }
+
+    #uploadExistingBtn:active { background: var(--primary-light); }
+
+    #uploadExistingBtn svg { width: 18px; height: 18px; fill: var(--primary); }
+
+    /* ── LIVE CAMERA SCREEN ── */
+    #liveCameraScreen {
+      background: #000;
+      position: relative;
+    }
+
+    #videoEl {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .camera-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 24px 20px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      background: linear-gradient(transparent, rgba(0,0,0,0.6));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #snapBtn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid rgba(255,255,255,0.5);
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s;
+    }
+
+    #snapBtn:active { transform: scale(0.9); }
+
+    #closeCameraBtn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #doneCapturingBtn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── CONVERTING OVERLAY ── */
+    #convertingOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #convertingOverlay.visible { display: flex; }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .converting-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .converting-sub {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* ── EXPORT SCREEN ── */
+    #exportScreen {
+      padding: 24px 20px;
+      gap: 0;
+      overflow-y: auto;
+    }
+
+    .export-header {
+      text-align: center;
+      padding-bottom: 28px;
+    }
+
+    .export-header .success-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--success-bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .export-header .success-icon svg {
+      width: 32px;
+      height: 32px;
+      fill: var(--success);
+    }
+
+    .export-header h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .export-header p {
+      font-size: 15px;
+      color: var(--text-secondary);
+    }
+
+    .export-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .export-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      box-shadow: var(--shadow);
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+    }
+
+    .export-card:active {
+      background: var(--primary-light);
+      border-color: var(--primary);
+      transform: scale(0.98);
+    }
+
+    .export-card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .export-card-icon svg { width: 26px; height: 26px; }
+    .icon-download { background: #e8f0fe; }
+    .icon-download svg { fill: var(--primary); }
+    .icon-drive { background: #fff3e0; }
+    .icon-share { background: #e8f5e9; }
+    .icon-share svg { fill: #2e7d32; }
+
+    .export-card-text { flex: 1; }
+    .export-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+    .export-card-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .export-card-arrow {
+      color: var(--border);
+      flex-shrink: 0;
+    }
+
+    .export-card-arrow svg { width: 20px; height: 20px; fill: var(--border); }
+
+    .restart-wrap {
+      padding-top: 24px;
+      text-align: center;
+    }
+
+    #restartBtn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #restartBtn:active { background: var(--primary-light); }
+
+    /* ── FILENAME INPUT ── */
+    .filename-bar {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      gap: 8px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .filename-bar-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    #filenameInput {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text);
+      background: transparent;
+      font-family: inherit;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .filename-ext {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .filename-bar:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,115,232,0.15);
+    }
+
+    /* Google Drive icon (custom SVG with colors) */
+    .drive-icon {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #323232;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      z-index: 200;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      pointer-events: none;
+      max-width: calc(100vw - 40px);
+      white-space: normal;
+      text-align: center;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { background: var(--success); }
+    #toast.error { background: var(--danger); }
+
+    /* ── iOS note ── */
+    .ios-note {
+      display: none;
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #5d4037;
+      line-height: 1.5;
+      margin-top: 12px;
+    }
+
+    .ios-note.visible { display: block; }
+
+    /* ── Setup note (Drive) ── */
+    .setup-note {
+      display: none;
+      background: var(--primary-light);
+      border: 1px solid #c5d8fb;
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #1558b0;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    .setup-note.visible { display: block; }
+    .setup-note strong { display: block; margin-bottom: 4px; }
+    .setup-note ol { padding-left: 18px; }
+    .setup-note a { color: var(--primary); }
+
+    /* ── FOOTER ── */
+    .app-footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: 10px 20px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      letter-spacing: 0.2px;
+      opacity: 0.7;
+    }
+
+    /* ── CUSTOM FOLDER BROWSER ── */
+    #folderModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(0,0,0,0.45);
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    #folderModal.open {
+      display: flex;
+    }
+
+    @media (min-width: 480px) {
+      #folderModal { align-items: center; }
+      .folder-sheet { border-radius: var(--radius) !important; max-width: 440px; }
+    }
+
+    .folder-sheet {
+      background: var(--surface);
+      width: 100%;
+      max-height: 75dvh;
+      border-radius: 20px 20px 0 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
+      animation: slideUp 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(60px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .folder-sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .folder-sheet-header h3 {
+      font-size: 17px;
+      font-weight: 700;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #folderCloseBtn {
+      background: var(--bg);
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Breadcrumb */
+    .folder-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .folder-breadcrumb::-webkit-scrollbar { display: none; }
+
+    .crumb {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--primary);
+      cursor: pointer;
+      white-space: nowrap;
+      padding: 2px 4px;
+      border-radius: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .crumb:last-child {
+      color: var(--text-secondary);
+      cursor: default;
+      font-weight: 600;
+    }
+
+    .crumb-sep {
+      color: var(--border);
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    /* Folder list */
+    #folderList {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .folder-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 12px;
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    .folder-loading .spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 3px;
+    }
+
+    .folder-empty {
+      text-align: center;
+      padding: 36px 20px;
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    .folder-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.12s;
+    }
+
+    .folder-row:last-child { border-bottom: none; }
+    .folder-row:active { background: var(--primary-light); }
+
+    .folder-row-icon {
+      width: 36px;
+      height: 36px;
+      background: #fff3e0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .folder-row-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: #e65100;
+    }
+
+    .folder-row-name {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .folder-row-arrow {
+      color: var(--border);
+    }
+    .folder-row-arrow svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--border);
+    }
+
+    /* Footer action */
+    .folder-sheet-footer {
+      display: flex;
+      gap: 10px;
+      padding: 14px 16px;
+      padding-bottom: max(14px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+
+    #folderSelectBtn {
+      flex: 1;
+      padding: 14px;
+      background: var(--primary);
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+
+    #folderSelectBtn:active { background: var(--primary-dark); }
+
+    #folderCancelBtn {
+      padding: 14px 20px;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+    </div>
+    <h1>DocScan PDF</h1>
+    <span id="pageCount"></span>
+  </header>
+
+  <!-- ═══ CAPTURE SCREEN ═══ -->
+  <div id="captureScreen" class="screen active">
+    <div class="capture-hint" id="captureHint">
+      <div class="hint-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.6C14.56 6.6 16.6 8.64 16.6 11.2S14.56 15.8 12 15.8 7.4 13.76 7.4 11.2 9.44 6.6 12 6.6zM5 3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5zm0 16V5h2.17l1.41-1.41A2 2 0 0 1 10 3h4c.55 0 1.05.22 1.41.59L16.83 5H19v14H5z"/></svg>
+      </div>
+      <h2>Scan a Document</h2>
+      <p>Take a photo of any document to convert it to PDF. You can add multiple pages.</p>
+    </div>
+
+    <!-- Thumbnail strip (shown after first photo) -->
+    <div id="thumbnailStrip">
+      <span class="strip-label">Pages</span>
+      <div class="thumbnails" id="thumbnails"></div>
+      <div id="iosNote" class="ios-note">
+        <strong>📱 iOS tip:</strong> After tapping "Save to Device", the PDF will open in a new tab. Tap the <strong>share icon</strong> (box with arrow) in your browser toolbar, then choose <strong>"Save to Files"</strong> to save it to your device.
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <button id="uploadExistingBtn">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        Upload Existing Photo
+      </button>
+      <div style="height:12px"></div>
+      <div class="fab-wrap" id="cameraFab">
+        <button id="cameraBtn" aria-label="Take photo">
+          <svg viewBox="0 0 24 24"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0-8.6C14.56 6.6 16.6 8.64 16.6 11.2S14.56 15.8 12 15.8 7.4 13.76 7.4 11.2 9.44 6.6 12 6.6zM5 3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5zm0 16V5h2.17l1.41-1.41A2 2 0 0 1 10 3h4c.55 0 1.05.22 1.41.59L16.83 5H19v14H5z"/></svg>
+        </button>
+        <span class="fab-label">Take Photo</span>
+      </div>
+      <div style="height:16px"></div>
+      <button id="convertBtn" disabled>Convert to PDF</button>
+    </div>
+  </div>
+
+  <!-- ═══ LIVE CAMERA SCREEN ═══ -->
+  <div id="liveCameraScreen" class="screen">
+    <video id="videoEl" autoplay playsinline muted></video>
+    <canvas id="snapCanvas" style="display:none"></canvas>
+    <div class="camera-overlay">
+      <button id="closeCameraBtn">✕ Close</button>
+      <button id="snapBtn" aria-label="Take photo"></button>
+      <button id="doneCapturingBtn">Done</button>
+    </div>
+  </div>
+
+  <!-- ═══ EXPORT SCREEN ═══ -->
+  <div id="exportScreen" class="screen">
+    <div class="export-header">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+      </div>
+      <h2>PDF Ready!</h2>
+      <p id="exportSubtitle">Your document has been converted.</p>
+    </div>
+
+    <!-- Filename input -->
+    <div class="filename-bar">
+      <span class="filename-bar-label">Name</span>
+      <input type="text" id="filenameInput" autocomplete="off" spellcheck="false" placeholder="document">
+      <span class="filename-ext">.pdf</span>
+    </div>
+
+    <div class="export-options">
+      <!-- Save to Device -->
+      <button class="export-card" id="saveDeviceBtn">
+        <div class="export-card-icon icon-download">
+          <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h4.34v6h4.66V9h4.34L12 2z" transform="rotate(180 12 12)"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </div>
+        <div class="export-card-text">
+          <div class="export-card-title">Save to Device</div>
+          <div class="export-card-sub">Download the PDF to your phone or computer</div>
+        </div>
+        <div class="export-card-arrow"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/></svg></div>
+      </button>
+
+      <!-- Google Drive -->
+      <button class="export-card" id="driveBtn">
+        <div class="export-card-icon icon-drive">
+          <!-- Google Drive color logo -->
+          <svg class="drive-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4.433 22l3.464-6h12.124l-3.464 6z" fill="#0066DA"/>
+            <path d="M0 16l3.464 6 6.928-12L7 4z" fill="#00AC47"/>
+            <path d="M14.072 4l-6.68 0L1 16h6.928z" fill="#EA4335" transform="translate(3.072 0)"/>
+            <path d="M20 16H7.072L10.536 10l6.928 0z" fill="#00832D"/>
+            <path d="M10.536 10L7.072 4H20l-3.464 6z" fill="#2684FC"/>
+            <path d="M14 16l-3.464 6H20l-3.464-6z" fill="#FFBA00"/>
+          </svg>
+        </div>
+        <div class="export-card-text">
+          <div class="export-card-title">Upload to Google Drive</div>
+          <div class="export-card-sub">Sign in to save directly to your Google Drive</div>
+        </div>
+        <div class="export-card-arrow"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/></svg></div>
+      </button>
+
+      <!-- Google Drive setup note (shown when CLIENT_ID is placeholder) -->
+      <div id="driveSetupNote" class="setup-note">
+        <strong>⚙️ Developer setup required for Google Drive</strong>
+        To enable Drive uploads, you need a Google Cloud OAuth2 Client ID:
+        <ol>
+          <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+          <li>Create a project → Enable "Google Drive API"</li>
+          <li>Create credentials → OAuth 2.0 Client ID → Web application</li>
+          <li>Add your domain to "Authorized JavaScript Origins"</li>
+          <li>Replace <code>YOUR_CLIENT_ID_HERE</code> in <code>index.html</code> with your Client ID</li>
+        </ol>
+      </div>
+
+      <!-- Share -->
+      <button class="export-card" id="shareBtn" style="display:none">
+        <div class="export-card-icon icon-share">
+          <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+        </div>
+        <div class="export-card-text">
+          <div class="export-card-title">Share</div>
+          <div class="export-card-sub">Send via Messages, Mail, AirDrop, and more</div>
+        </div>
+        <div class="export-card-arrow"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/></svg></div>
+      </button>
+    </div>
+
+    <div class="restart-wrap">
+      <button id="restartBtn">↩ Scan Another Document</button>
+    </div>
+  </div>
+</div>
+
+<footer class="app-footer">Apps by Miru &mdash; PDF Converter v1.0</footer>
+
+<!-- ═══ CUSTOM FOLDER BROWSER MODAL ═══ -->
+<div id="folderModal">
+  <div class="folder-sheet">
+    <div class="folder-sheet-header">
+      <h3 id="folderModalTitle">My Drive</h3>
+      <button id="folderCloseBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="folder-breadcrumb" id="folderBreadcrumb"></div>
+    <div id="folderList"></div>
+    <div class="folder-sheet-footer">
+      <button id="folderCancelBtn">Cancel</button>
+      <button id="folderSelectBtn">Save here</button>
+    </div>
+  </div>
+</div>
+
+<!-- Converting overlay -->
+<div id="convertingOverlay">
+  <div class="spinner"></div>
+  <div class="converting-text">Converting to PDF…</div>
+  <div class="converting-sub" id="convertingSub">Processing your photos</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Camera-only input (opens camera app directly) -->
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+<!-- Gallery input (opens photo library, no capture attribute) -->
+<input type="file" id="galleryInput" accept="image/*" style="display:none">
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG — Replace with your Google OAuth2 Client ID
+// Get one at: https://console.cloud.google.com/
+// Create a Web application credential and add your domain
+// to "Authorized JavaScript Origins"
+// ─────────────────────────────────────────────
+const GOOGLE_CLIENT_ID = '443121660821-3qdq4jhd2viomb11ovfjq8sga2a1j3qt.apps.googleusercontent.com';
+// Google API Key — needed for the Drive Folder Picker widget.
+// Get one at: https://console.cloud.google.com/ → APIs & Services → Credentials → Create API Key
+// Restrict it to HTTP referrers: https://pdf.mirunan.com/* and http://localhost:808/*
+const GOOGLE_API_KEY = 'AIzaSyCdiwUUINtoZqHoz1iJGwVXmKqTeoZ6mQM';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly';
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+let capturedImages = [];   // Array of { dataURL, width, height, file }
+let pdfBlob = null;
+let pdfFilename = '';
+let tokenClient = null;
+let currentAccessToken = null;
+
+// ─────────────────────────────────────────────
+// DOM refs
+// ─────────────────────────────────────────────
+const captureScreen    = document.getElementById('captureScreen');
+const liveCameraScreen = document.getElementById('liveCameraScreen');
+const exportScreen     = document.getElementById('exportScreen');
+const captureHint      = document.getElementById('captureHint');
+const thumbnailStrip   = document.getElementById('thumbnailStrip');
+const thumbnails       = document.getElementById('thumbnails');
+const pageCount        = document.getElementById('pageCount');
+const cameraInput      = document.getElementById('cameraInput');
+const galleryInput     = document.getElementById('galleryInput');
+const cameraBtn        = document.getElementById('cameraBtn');
+const uploadExistingBtn= document.getElementById('uploadExistingBtn');
+const convertBtn       = document.getElementById('convertBtn');
+const convertingOverlay= document.getElementById('convertingOverlay');
+const convertingSub    = document.getElementById('convertingSub');
+const exportSubtitle   = document.getElementById('exportSubtitle');
+const saveDeviceBtn    = document.getElementById('saveDeviceBtn');
+const driveBtn         = document.getElementById('driveBtn');
+const driveSetupNote   = document.getElementById('driveSetupNote');
+const shareBtn         = document.getElementById('shareBtn');
+const restartBtn       = document.getElementById('restartBtn');
+const iosNote          = document.getElementById('iosNote');
+const toastEl          = document.getElementById('toast');
+const filenameInput    = document.getElementById('filenameInput');
+
+// ─────────────────────────────────────────────
+// Detect capabilities
+// ─────────────────────────────────────────────
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const hasShare = !!(navigator.share);
+
+// Show iOS tip when on iOS
+if (isIOS) iosNote.classList.add('visible');
+
+// Show Share button on supported browsers
+if (hasShare) shareBtn.style.display = 'flex';
+
+// Show Drive setup note if Client ID is placeholder
+if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') driveSetupNote.classList.add('visible');
+
+// ─────────────────────────────────────────────
+// Screen management
+// ─────────────────────────────────────────────
+function showScreen(screen) {
+  [captureScreen, liveCameraScreen, exportScreen].forEach(s => s.classList.remove('active'));
+  screen.classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type = '', duration = 3000) {
+  toastEl.textContent = msg;
+  toastEl.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = ''; }, duration);
+}
+
+// ─────────────────────────────────────────────
+// Camera input (file picker / native camera)
+// ─────────────────────────────────────────────
+// Big blue FAB → opens camera directly
+cameraBtn.addEventListener('click', () => cameraInput.click());
+
+// "Upload Existing Photo" → opens photo library (no capture attribute)
+uploadExistingBtn.addEventListener('click', () => galleryInput.click());
+
+cameraInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  cameraInput.value = '';
+  await addImage(file);
+});
+
+galleryInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  galleryInput.value = '';
+  await addImage(file);
+});
+
+async function addImage(file) {
+  try {
+    const compressed = await compressImage(file);
+    capturedImages.push(compressed);
+    renderThumbnails();
+    updateUI();
+  } catch (err) {
+    showToast('Could not load image. Please try again.', 'error');
+    console.error(err);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Image compression via canvas
+// ─────────────────────────────────────────────
+function compressImage(file, maxDim = 2000, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve({ dataURL: canvas.toDataURL('image/jpeg', quality), width: w, height: h });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ─────────────────────────────────────────────
+// Thumbnails
+// ─────────────────────────────────────────────
+function renderThumbnails() {
+  thumbnails.innerHTML = '';
+  capturedImages.forEach((img, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-wrap';
+
+    const imgEl = document.createElement('img');
+    imgEl.src = img.dataURL;
+    imgEl.alt = `Page ${i + 1}`;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'thumb-remove';
+    removeBtn.innerHTML = '✕';
+    removeBtn.setAttribute('aria-label', `Remove page ${i + 1}`);
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      capturedImages.splice(i, 1);
+      renderThumbnails();
+      updateUI();
+    });
+
+    wrap.appendChild(imgEl);
+    wrap.appendChild(removeBtn);
+    thumbnails.appendChild(wrap);
+  });
+
+  // Add "+" button at the end
+  const addBtn = document.createElement('div');
+  addBtn.className = 'thumb-add';
+  addBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>Add page`;
+  addBtn.setAttribute('role', 'button');
+  addBtn.setAttribute('tabindex', '0');
+  addBtn.addEventListener('click', () => cameraInput.click()); // camera by default for add page
+  thumbnails.appendChild(addBtn);
+}
+
+function updateUI() {
+  const count = capturedImages.length;
+
+  if (count === 0) {
+    captureHint.style.display = '';
+    thumbnailStrip.classList.remove('visible');
+    pageCount.style.display = 'none';
+    convertBtn.disabled = true;
+  } else {
+    captureHint.style.display = 'none';
+    thumbnailStrip.classList.add('visible');
+    pageCount.textContent = `${count} page${count !== 1 ? 's' : ''}`;
+    pageCount.style.display = '';
+    convertBtn.disabled = false;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Filename input — keep pdfFilename in sync, sanitise invalid chars
+filenameInput.addEventListener('input', () => {
+  const raw = filenameInput.value.trim();
+  // Strip characters not allowed in filenames
+  const safe = raw.replace(/[\/\\:*?"<>|]/g, '') || 'document';
+  pdfFilename = safe + '.pdf';
+});
+
+filenameInput.addEventListener('blur', () => {
+  // If user cleared the field, restore a safe default
+  if (!filenameInput.value.trim()) {
+    filenameInput.value = 'document';
+    pdfFilename = 'document.pdf';
+  }
+});
+
+// Convert to PDF
+// ─────────────────────────────────────────────
+convertBtn.addEventListener('click', async () => {
+  if (capturedImages.length === 0) return;
+  convertingOverlay.classList.add('visible');
+  convertingSub.textContent = `Processing ${capturedImages.length} page${capturedImages.length !== 1 ? 's' : ''}…`;
+
+  // Yield to browser to render overlay
+  await new Promise(r => setTimeout(r, 60));
+
+  try {
+    pdfBlob = await buildPDF(capturedImages);
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const defaultName = `document_${stamp}`;
+    pdfFilename = defaultName + '.pdf';
+
+    // Pre-fill filename input (without .pdf — user doesn't need to type the extension)
+    filenameInput.value = defaultName;
+
+    exportSubtitle.textContent = `${capturedImages.length} page${capturedImages.length !== 1 ? 's' : ''} · Ready to save`;
+    convertingOverlay.classList.remove('visible');
+    showScreen(exportScreen);
+    pageCount.style.display = 'none';
+    // Focus filename input so user can rename immediately
+    setTimeout(() => filenameInput.select(), 300);
+  } catch (err) {
+    convertingOverlay.classList.remove('visible');
+    showToast('Failed to create PDF. Please try again.', 'error');
+    console.error(err);
+  }
+});
+
+async function buildPDF(images) {
+  const { jsPDF } = window.jspdf;
+  const first = images[0];
+  const orientation = first.width >= first.height ? 'landscape' : 'portrait';
+  const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    if (i > 0) {
+      const orient = img.width >= img.height ? 'landscape' : 'portrait';
+      doc.addPage('a4', orient);
+    }
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 5;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin * 2;
+    const ratio = Math.min(maxW / img.width, maxH / img.height);
+    const drawW = img.width * ratio;
+    const drawH = img.height * ratio;
+    const x = margin + (maxW - drawW) / 2;
+    const y = margin + (maxH - drawH) / 2;
+
+    // Alias prevents jsPDF's internal deduplication bug with multiple images
+    doc.addImage(img.dataURL, 'JPEG', x, y, drawW, drawH, `img_${i}`, 'MEDIUM');
+  }
+
+  return doc.output('blob');
+}
+
+// ─────────────────────────────────────────────
+// Save to Device
+// ─────────────────────────────────────────────
+saveDeviceBtn.addEventListener('click', () => downloadFile(pdfBlob, pdfFilename));
+
+function downloadFile(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+  if (isIOS) {
+    showToast('PDF opened — tap the share icon to save to Files', '', 5000);
+  } else {
+    showToast('PDF downloaded!', 'success');
+  }
+}
+
+// ─────────────────────────────────────────────
+// Web Share API
+// ─────────────────────────────────────────────
+shareBtn.addEventListener('click', async () => {
+  if (!pdfBlob) return;
+  try {
+    const file = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Scanned Document' });
+      showToast('Shared successfully!', 'success');
+    } else {
+      // Fallback to download
+      downloadFile(pdfBlob, pdfFilename);
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      showToast('Share failed. Downloading instead.', 'error');
+      downloadFile(pdfBlob, pdfFilename);
+    }
+  }
+});
+
+// ─────────────────────────────────────────────
+// Google Drive
+// ─────────────────────────────────────────────
+let gisLoaded = false;
+let tokenExpiresAt = 0; // timestamp (ms) when currentAccessToken expires
+// Bump this string any time DRIVE_SCOPE changes — forces re-auth on next click
+const TOKEN_SCOPE_VERSION = 'v3-custom-browser';
+
+function hasValidToken() {
+  // Also check that the token was issued for the current scope version
+  const scopeOk = sessionStorage.getItem('tokenScopeVersion') === TOKEN_SCOPE_VERSION;
+  return scopeOk && currentAccessToken && Date.now() < tokenExpiresAt - 60000;
+}
+
+driveBtn.addEventListener('click', async () => {
+  if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+    showToast('Google Drive requires setup. See the note below.', 'error', 4000);
+    driveSetupNote.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+  driveBtn.disabled = true;
+  try {
+    await loadGoogleLibraries();
+    if (!tokenClient) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: '' // will be set per-request
+      });
+    }
+    // Only re-authenticate if we don't have a valid token
+    if (!hasValidToken()) {
+      currentAccessToken = await new Promise((resolve, reject) => {
+        tokenClient.callback = (resp) => {
+          if (resp.error) reject(new Error(resp.error));
+          else {
+            // Cache expiry — Google tokens last 3600s by default
+            tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
+            sessionStorage.setItem('tokenScopeVersion', TOKEN_SCOPE_VERSION);
+            resolve(resp.access_token);
+          }
+        };
+        // No prompt — silently reuse Google session if possible
+        tokenClient.requestAccessToken({ prompt: '' });
+      });
+    }
+
+    // Show custom folder browser, then upload
+    let folderId = null;
+    showToast('', ''); // dismiss any toast
+    folderId = await showFolderPicker(currentAccessToken);
+
+    showToast('Uploading to Google Drive…', '', 10000);
+    const fileId = await uploadToDrive(pdfBlob, pdfFilename, folderId);
+    showToast('Uploaded to Google Drive! Tap to open.', 'success', 5000);
+
+    // Make toast tappable to open Drive
+    toastEl.style.cursor = 'pointer';
+    toastEl.style.pointerEvents = 'auto';
+    toastEl.addEventListener('click', () => {
+      window.open(`https://drive.google.com/file/d/${fileId}/view`, '_blank');
+      toastEl.style.cursor = '';
+      toastEl.style.pointerEvents = '';
+    }, { once: true });
+
+  } catch (err) {
+    if (err.message !== 'popup_closed_by_user') {
+      showToast('Drive upload failed. Please try again.', 'error');
+      console.error(err);
+    }
+  } finally {
+    driveBtn.disabled = false;
+  }
+});
+
+function loadGoogleLibraries() {
+  return new Promise((resolve, reject) => {
+    if (gisLoaded) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = () => { gisLoaded = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Custom Folder Browser (Drive API v3)
+// ─────────────────────────────────────────────
+const folderModal    = document.getElementById('folderModal');
+const folderList     = document.getElementById('folderList');
+const folderBreadcrumb = document.getElementById('folderBreadcrumb');
+const folderModalTitle = document.getElementById('folderModalTitle');
+const folderSelectBtn  = document.getElementById('folderSelectBtn');
+const folderCancelBtn  = document.getElementById('folderCancelBtn');
+const folderCloseBtn   = document.getElementById('folderCloseBtn');
+
+// Breadcrumb stack: [{id, name}]  — 'root' for My Drive
+let breadcrumbStack = [];
+let selectedFolderResolve = null;
+
+folderSelectBtn.addEventListener('click', () => {
+  const current = breadcrumbStack[breadcrumbStack.length - 1];
+  closeFolderModal(current ? current.id : null);
+});
+folderCancelBtn.addEventListener('click', () => closeFolderModal(null));
+folderCloseBtn.addEventListener('click',  () => closeFolderModal(null));
+folderModal.addEventListener('click', (e) => {
+  if (e.target === folderModal) closeFolderModal(null);
+});
+
+function closeFolderModal(folderId) {
+  folderModal.classList.remove('open');
+  if (selectedFolderResolve) { selectedFolderResolve(folderId); selectedFolderResolve = null; }
+}
+
+function showFolderPicker(accessToken) {
+  return new Promise((resolve) => {
+    selectedFolderResolve = resolve;
+    breadcrumbStack = [{ id: 'root', name: 'My Drive' }];
+    renderBreadcrumb();
+    openFolderLevel('root', accessToken);
+    folderModal.classList.add('open');
+  });
+}
+
+function renderBreadcrumb() {
+  folderBreadcrumb.innerHTML = '';
+  breadcrumbStack.forEach((crumb, i) => {
+    const span = document.createElement('span');
+    span.className = 'crumb';
+    span.textContent = crumb.name;
+    if (i < breadcrumbStack.length - 1) {
+      span.addEventListener('click', () => {
+        breadcrumbStack = breadcrumbStack.slice(0, i + 1);
+        renderBreadcrumb();
+        openFolderLevel(crumb.id, currentAccessToken);
+      });
+    }
+    folderBreadcrumb.appendChild(span);
+    if (i < breadcrumbStack.length - 1) {
+      const sep = document.createElement('span');
+      sep.className = 'crumb-sep';
+      sep.textContent = '›';
+      folderBreadcrumb.appendChild(sep);
+    }
+  });
+  // Scroll breadcrumb to end
+  folderBreadcrumb.scrollLeft = folderBreadcrumb.scrollWidth;
+
+  // Update header title + Select button label
+  const current = breadcrumbStack[breadcrumbStack.length - 1];
+  folderModalTitle.textContent = current.name;
+  folderSelectBtn.textContent = `Save to "${current.name}"`;
+}
+
+async function openFolderLevel(parentId, accessToken) {
+  folderList.innerHTML = `<div class="folder-loading"><div class="spinner"></div>Loading…</div>`;
+
+  try {
+    const q = parentId === 'root'
+      ? `mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`
+      : `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name&pageSize=200`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) throw new Error(`Drive API error ${res.status}`);
+    const data = await res.json();
+    const folders = data.files || [];
+
+    folderList.innerHTML = '';
+
+    if (folders.length === 0) {
+      folderList.innerHTML = `<div class="folder-empty">No subfolders here.<br>Tap "Save here" to upload to this folder.</div>`;
+      return;
+    }
+
+    folders.forEach(folder => {
+      const row = document.createElement('div');
+      row.className = 'folder-row';
+      row.innerHTML = `
+        <div class="folder-row-icon">
+          <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+        </div>
+        <span class="folder-row-name">${escapeHtml(folder.name)}</span>
+        <div class="folder-row-arrow"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/></svg></div>
+      `;
+      row.addEventListener('click', () => {
+        breadcrumbStack.push({ id: folder.id, name: folder.name });
+        renderBreadcrumb();
+        openFolderLevel(folder.id, accessToken);
+      });
+      folderList.appendChild(row);
+    });
+  } catch (err) {
+    folderList.innerHTML = `<div class="folder-empty">Failed to load folders.<br><small>${escapeHtml(err.message)}</small></div>`;
+    console.error(err);
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function uploadToDrive(blob, filename, folderId = null) {
+  const metadata = {
+    name: filename,
+    mimeType: 'application/pdf',
+    ...(folderId ? { parents: [folderId] } : {})
+  };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', blob);
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${currentAccessToken}` },
+      body: form
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive upload failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id;
+}
+
+// ─────────────────────────────────────────────
+// Restart
+// ─────────────────────────────────────────────
+restartBtn.addEventListener('click', () => {
+  capturedImages = [];
+  pdfBlob = null;
+  pdfFilename = '';
+  filenameInput.value = '';
+  renderThumbnails();
+  updateUI();
+  showScreen(captureScreen);
+  pageCount.style.display = 'none';
+});
+
+// ─────────────────────────────────────────────
+// Service Worker
+// ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
