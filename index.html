@@ -1080,10 +1080,6 @@
 // to "Authorized JavaScript Origins"
 // ─────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = '443121660821-3qdq4jhd2viomb11ovfjq8sga2a1j3qt.apps.googleusercontent.com';
-// Google API Key — needed for the Drive Folder Picker widget.
-// Get one at: https://console.cloud.google.com/ → APIs & Services → Credentials → Create API Key
-// Restrict it to HTTP referrers: https://pdf.mirunan.com/* and http://localhost:808/*
-const GOOGLE_API_KEY = 'AIzaSyCdiwUUINtoZqHoz1iJGwVXmKqTeoZ6mQM';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly';
 
 // ─────────────────────────────────────────────
@@ -1496,6 +1492,8 @@ const folderCloseBtn   = document.getElementById('folderCloseBtn');
 // Breadcrumb stack: [{id, name}]  — 'root' for My Drive
 let breadcrumbStack = [];
 let selectedFolderResolve = null;
+// Remember last used folder across uploads in the same session
+let lastUsedFolderStack = null; // saved copy of breadcrumbStack on successful select
 
 folderSelectBtn.addEventListener('click', () => {
   const current = breadcrumbStack[breadcrumbStack.length - 1];
@@ -1509,15 +1507,27 @@ folderModal.addEventListener('click', (e) => {
 
 function closeFolderModal(folderId) {
   folderModal.classList.remove('open');
+  if (folderId !== null && folderId !== undefined) {
+    // Save the full breadcrumb path so we can restore it next time
+    lastUsedFolderStack = breadcrumbStack.slice();
+  }
   if (selectedFolderResolve) { selectedFolderResolve(folderId); selectedFolderResolve = null; }
 }
 
 function showFolderPicker(accessToken) {
   return new Promise((resolve) => {
     selectedFolderResolve = resolve;
-    breadcrumbStack = [{ id: 'root', name: 'My Drive' }];
-    renderBreadcrumb();
-    openFolderLevel('root', accessToken);
+    // Restore last used folder if available, otherwise start at root
+    if (lastUsedFolderStack) {
+      breadcrumbStack = lastUsedFolderStack.slice();
+      const current = breadcrumbStack[breadcrumbStack.length - 1];
+      renderBreadcrumb();
+      openFolderLevel(current.id, accessToken);
+    } else {
+      breadcrumbStack = [{ id: 'root', name: 'My Drive' }];
+      renderBreadcrumb();
+      openFolderLevel('root', accessToken);
+    }
     folderModal.classList.add('open');
   });
 }
